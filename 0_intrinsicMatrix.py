@@ -1,3 +1,7 @@
+"""
+参考：https://www.jb51.net/article/247128.htm
+"""
+
 import os
 import numpy as np
 import cv2
@@ -5,7 +9,7 @@ import glob
 
 
 def calib(inter_corner_shape, size_per_grid, img_dir, img_type, inMatrixPath, drawCornerDir):
-    """ calibrate the camera, and get intrinsicMatrix"""
+    """ calibrate the camera, and get TrailCamera"""
     global gray_img
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     w, h = inter_corner_shape
@@ -34,10 +38,12 @@ def calib(inter_corner_shape, size_per_grid, img_dir, img_type, inMatrixPath, dr
             # view the corners
             cv2.drawChessboardCorners(img, (w, h), cp_img, ret)
             # cv2.imshow('FoundCorners', img)
-            # cv2.imwrite(drawCornerPath, img)
+            cv2.imwrite(drawCornerPath, img)  # TODO
             # cv2.waitKey(100)
     cv2.destroyAllWindows()
     # calibrate the camera
+    # ret:重投影误差（像素越高返回的ret越大）
+    # mtx:内参矩阵   dist:畸变系数   rvecs:旋转向量   tvecs:平移向量
     ret, mat_inter, coff_dis, v_rot, v_trans = cv2.calibrateCamera(obj_points, img_points, gray_img.shape[::-1], None,
                                                                    None)
     print("ret:", ret)
@@ -77,18 +83,20 @@ def calib(inter_corner_shape, size_per_grid, img_dir, img_type, inMatrixPath, dr
     return mat_inter, coff_dis
 
 
-def dedistortion(inter_corner_shape, img_dir, img_type, save_dir, mat_inter, coff_dis):
+def dedistortion(img_dir, img_type, save_dir, mat_inter, coff_dis):
     """ save dedistorted images """
-    w, h = inter_corner_shape
     images = glob.glob(img_dir + os.sep + '**.' + img_type)
     for fname in images:
         img_name = fname.split(os.sep)[-1]
         img = cv2.imread(fname)
-        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mat_inter, coff_dis, (w, h), 0, (w, h))  # 自由比例参数
+        imgh, imgw = img.shape[:2]
+        # TODO：标定相机内参的图片分辨率长宽比例 需要同 待矫正图片分辨率长宽比例 相同
+        # TODO：这里就是读取图片长宽即可
+        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mat_inter, coff_dis, (imgh, imgw), 0, (imgh, imgw))  # 自由比例参数
         dst = cv2.undistort(img, mat_inter, coff_dis, None, newcameramtx)
         # clip the image
-        # x,y,w,h = roi
-        # dst = dst[y:y+h, x:x+w]
+        # x, y, w, h = roi
+        # dst = dst[y:y + h, x:x + w]
         cv2.imwrite(save_dir + os.sep + img_name, dst)
     print('Dedistorted images have been saved to: {} successfully.'.format(save_dir))
 
@@ -97,11 +105,11 @@ if __name__ == '__main__':
     # ---------------- initialization ---------------- #
     inter_corner_shape = (11, 8)
     size_per_grid = 0.045
-    img_dir = r"data\python\intrinsicMatrix\images"
-    save_dir = r"data\python\intrinsicMatrix\dedistort"
-    drawCornerDir = r"data\python\intrinsicMatrix\drawCorners"
-    inMatrixPath = 'result/instrinsicMatrix.txt'
-    img_type = "tif"
+    img_dir = r"data\python\TrailCamera\images"
+    save_dir = r"data\python\TrailCamera\dedistort"
+    drawCornerDir = r"data\python\TrailCamera\drawCorners"
+    inMatrixPath = r"data\python\TrailCamera\TrailCamera.txt"
+    img_type = "JPG"
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -112,4 +120,4 @@ if __name__ == '__main__':
     # calibrate the camera
     mat_inter, coff_dis = calib(inter_corner_shape, size_per_grid, img_dir, img_type, inMatrixPath, drawCornerDir)
     # save dedistorted images
-    dedistortion(inter_corner_shape, img_dir, img_type, save_dir, mat_inter, coff_dis)
+    dedistortion(img_dir, img_type, save_dir, mat_inter, coff_dis)
